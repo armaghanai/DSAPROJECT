@@ -1,4 +1,4 @@
-#include "metadataparser.hpp"
+#include "../include/metadataparser.hpp"
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -67,11 +67,19 @@ std::vector<std::string> MetadataParser::splitCSVLine(const std::string& line) {
         char c = line[i];
         
         if (c == '"') {
-            in_quotes = !in_quotes;
-        } else if (c == ',' && !in_quotes) {
+            if (in_quotes && i + 1 < line.length() && line[i + 1] == '"') 
+            {
+                field += '"';   // add literal quote
+                i++;            // skip the next quote
+            } 
+            else 
+                in_quotes = !in_quotes;  // toggle
+        } 
+        else if (c == ',' && !in_quotes) {
             fields.push_back(field);
             field.clear();
-        } else {
+        } 
+        else {
             field += c;
         }
     }
