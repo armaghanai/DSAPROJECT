@@ -4,7 +4,7 @@
 
 int main() {
     // ======== Step 1: Set dataset path ========
-    std::string dataset_path = "data/2020-04-10"; // Change this to your CORD-19 dataset folder
+    std::string dataset_path = "D:/3RD SEMESTER/Data Structures and Algorithms/dsa search engine/DSA-Searh-Engine/data/2020-04-10" ;// Change this to your CORD-19 dataset folder
     MetadataParser parser(dataset_path);
 
     // ======== Step 2: Parse metadata ========

@@ -87,9 +87,15 @@ int MetadataParser::metadata_parse() {
             paper.body_text = full_text;
             full_text_count++;
         }
+
+        /*std::cout << "Parsed paper: " << paper.paper_id
+          << " | Title: " << paper.title << "\n";*/
+
         
         papers.push_back(paper);
         parsed_count++;
+        std::cout << paper.body_text << std::endl;
+
         
         if (parsed_count % 1000 == 0) {
             std::cout << "Parsed " << parsed_count << " papers (with full text: " 
@@ -146,7 +152,7 @@ std::string MetadataParser::find_fulltext_pdf(const std::string& sha) {
     if (sha.empty()) return "";
     
     // CORD-19 structure: document_parses/pdf_json/{sha}.json
-    std::string json_path = data_path + "/document_parses/pdf_json/" + sha + ".json";
+    std::string json_path = data_path + "/comm_use_subset/pdf_json/" + sha + ".json";
     
     if (fs::exists(json_path)) {
         return extract_body_from_json(json_path);
@@ -159,7 +165,7 @@ std::string MetadataParser::find_fulltext_xml(const std::string& pmcid) {
     if (pmcid.empty()) return "";
     
     // CORD-19 structure: document_parses/pmc_json/{pmcid}.xml.json
-    std::string json_path = data_path + "/document_parses/pmc_json/" + pmcid + ".xml.json";
+    std::string json_path = data_path + "/comm_use_subset/pmc_json/" + pmcid + ".xml.json";
     
     if (fs::exists(json_path)) {
         return extract_body_from_json(json_path);
