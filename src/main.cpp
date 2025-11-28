@@ -2,11 +2,12 @@
 #include <string>
 #include <filesystem>
 #include "../include/metadataparser.hpp"
+#include "../include/LexiconBuilder.hpp"
 
 namespace fs = std::filesystem;
 
 int main() {
-    std::cout << "=== METADATA PARSER TEST ===" << std::endl;
+    std::cout << "=== LEXICON TEXT ===" << std::endl;
 
     std::cout << "Current directory: " << fs::current_path() << "\n" << std::endl;
     
@@ -36,8 +37,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "✓ Parsing successful!" << std::endl;
-    std::cout << "Total papers parsed: " << parser.getCount() << "\n" << std::endl;
+    /*
 
     // Get papers
     const auto &papers = parser.getPapers();
@@ -71,6 +71,17 @@ int main() {
         }
     }
     
-    std::cout << "\n=== TEST COMPLETED ===" << std::endl;
+    std::cout << "\n=== TEST COMPLETED ===" << std::endl;*/
+    
+    LexiconBuilder lexicon;
+    for (auto& paper : parser.getPapers()) {
+        std::string text = paper.title + " " + paper.abstract_text;
+        lexicon.addDocument(paper.cord_uid, text);
+    }
+
+    lexicon.build();
+    lexicon.displayLexicon();
+
+
     return 0;
 }
