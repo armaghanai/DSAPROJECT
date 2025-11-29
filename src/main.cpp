@@ -1,6 +1,7 @@
 #include "metadataparser.hpp"
 #include <iostream>
 #include <iomanip>
+#include <string>
 
 int main() {
     // ======== Step 1: Set dataset path ========
@@ -18,18 +19,17 @@ int main() {
     std::cout << "Total papers parsed: " << parser.papers.size() << std::endl;
 
     // ======== Step 3: Print full body text of first few papers ========
-    int num_to_show = 5; // change how many papers you want to see
+    int num_to_show = 8000; // change how many papers you want to see
     std::cout << "\n=== Showing full text of first " << num_to_show << " papers ===\n" << std::endl;
 
-    for (int i = 0; i < std::min(num_to_show, (int)parser.papers.size()); ++i) {
+    for (int i = 0; i < num_to_show; i+=800) {
         const Paper& paper = parser.papers[i];
         std::cout << "Paper ID: " << paper.paper_id << std::endl;
         std::cout << "Title: " << paper.title << std::endl;
         std::cout << "Publish Date: " << paper.publish_date << std::endl;
         std::cout << "Authors: " << paper.authors << std::endl;
-        std::cout << "\n--- Full Text ---\n" << std::endl;
-        std::cout << paper.body_text << std::endl;
-        std::cout << "============================================\n" << std::endl;
+        std::cout << (paper.body_text.empty() ? "[No Text]" : paper.body_text.substr(0, 500)) << "\n...";
+
     }
 
     return 0;
