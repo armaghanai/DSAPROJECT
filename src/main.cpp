@@ -8,7 +8,7 @@
 int main() {
     // Step 1: Set dataset path
     // absolute path of the dataset folder containing metadata + JSON files
-    std::string dataset_path = "D:/3RD SEMESTER/Data Structures and Algorithms/dsa search engine/DSA-Searh-Engine/data/2020-04-10" ;
+    std::string dataset_path = "D:/THird Semester/DSA/dsaspp/DSAPROJECT/data/2020-04-10" ;
     MetadataParser parser(dataset_path);
 
     // Step 2: Parse metadata
@@ -45,7 +45,7 @@ int main() {
 
     // Step 5: Save lexicon to CSV
     // directory where lexicon.csv will be written
-    std::string filepath = "D:/3RD SEMESTER/Data Structures and Algorithms/dsa search engine/DSA-Searh-Engine/indices/";
+    std::string filepath = "D:/THird Semester/DSA/dsaspp/DSAPROJECT/indices/";
     std::string filename = "lexicon.csv";
 
     // write the sorted lexicon to a CSV file

@@ -87,9 +87,9 @@ void LexiconBuilder::save_to_csv(const std::string& csv_path)
     std::vector<std::pair<std::string, std::pair<uint32_t,uint32_t>>> sorted(
     lexicon_data.begin(), lexicon_data.end());
 
-    // sort by the word in alphabetical order
+    // sort by frequency 
     std::sort(sorted.begin(), sorted.end(),
-          [](const auto& a, const auto& b){ return a.first < b.first; });
+          [](const auto& a, const auto& b){ return a.second.second > b.second.second; });
 
     // write CSV header
     out << "word,word_id,frequency\n";
