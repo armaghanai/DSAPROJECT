@@ -94,7 +94,7 @@ int MetadataParser::metadata_parse() {
         
         papers.push_back(paper);
         parsed_count++;
-        //std::cout << paper.body_text << std::endl;
+        std::cout << paper.body_text << std::endl;
 
         
         if (parsed_count % 1000 == 0) {
