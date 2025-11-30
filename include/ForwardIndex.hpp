@@ -1,5 +1,4 @@
-#ifndef FORWARDINDEX_HPP
-#define FORWARDINDEX_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -63,17 +62,19 @@ public:
     
     // Get statistics
     uint32_t get_total_documents() const { return total_documents; }
-    uint64_t get_total_terms() const { return total_terms; }
+    uint32_t get_total_terms() const { return total_terms; }
     size_t get_index_size() const { return forward_index.size(); }
     
     // Save forward index to binary file
     bool save_to_binary(const std::string& file_path);
+    std::unordered_map<std::string, uint32_t> get_doc_id_map();
     
     // Load forward index from binary file
     bool load_from_binary(const std::string& file_path);
     
     // Save forward index to CSV (human-readable format)
     void save_to_csv(const std::string& file_path);
+    void save_first_n_to_csv(const std::string& file_path, size_t number_of_docs);
     
     // Clear the index
     void clear();
@@ -85,4 +86,3 @@ public:
     double get_average_doc_length() const;
 };
 
-#endif

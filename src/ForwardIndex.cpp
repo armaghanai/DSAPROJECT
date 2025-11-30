@@ -216,33 +216,60 @@ bool ForwardIndex::load_from_binary(const std::string& file_path) {
     return true;
 }
 
-void ForwardIndex::save_to_csv(const std::string& file_path) {
+void ForwardIndex::save_to_csv(const std::string& file_path)
+{
     std::ofstream out(file_path);
     if (!out.is_open()) {
-        std::cerr << "Error: Cannot open file " << file_path << " for writing" << std::endl;
+        std::cerr << "Error: Cannot open file " << file_path << " for writing\n";
         return;
     }
-    
-    // Write header
-    out << "doc_id,title,abstract,doc_length,num_unique_terms,word_id,frequency\n";
-    
-    // Write each document
-    for (const auto& entry : forward_index) {
-        const DocumentIndex& doc = entry.second;
-        
+
+    // CSV header
+    out << "doc_id,word_id,frequency\n";
+
+    for (const auto& [doc_id, doc] : forward_index) {
+
         for (const auto& term : doc.terms) {
-            out << "\"" << doc.doc_id << "\",";
-            out << "\"" << doc.title << "\",";
-            out << "\"" << doc.abstract_text << "\",";
-            out << doc.doc_length << ",";
-            out << doc.terms.size() << ",";
-            out << term.word_id << ",";
-            out << term.frequency << "\n";
+            out << doc.doc_id << "," 
+                << term.word_id << ","
+                << term.frequency << "\n";
         }
     }
-    
+
     out.close();
-    std::cout << "Forward index CSV saved to " << file_path << std::endl;
+    std::cout << "CSV for forward index saved to " << file_path << "\n";
+}
+std::unordered_map<std::string, uint32_t> ForwardIndex::get_doc_id_map()
+{
+    return doc_id_map;
+}
+void ForwardIndex::save_first_n_to_csv(const std::string& file_path, size_t number_of_docs)
+{
+    std::ofstream out(file_path);
+    if (!out.is_open()) {
+        std::cerr << "Error: Cannot open file " << file_path << " for writing\n";
+        return;
+    }
+
+    // CSV header
+    out << "doc_id,word_id,frequency\n";
+
+    size_t count = 0;
+    for (const auto& [doc_id, doc] : forward_index) {
+        if (count >= number_of_docs)
+            break;
+
+        for (const auto& term : doc.terms) {
+            out << doc.doc_id << "," 
+                << term.word_id << ","
+                << term.frequency << "\n";
+        }
+
+        count++;
+    }
+
+    out.close();
+    std::cout << "CSV for first " << number_of_docs << " docs saved to " << file_path << "\n";
 }
 
 void ForwardIndex::clear() {
@@ -253,7 +280,8 @@ void ForwardIndex::clear() {
     total_terms = 0;
 }
 
-void ForwardIndex::print_statistics() const {
+void ForwardIndex::print_statistics() const 
+{
     std::cout << "\n=== Forward Index Statistics ===" << std::endl;
     std::cout << "Total documents: " << total_documents << std::endl;
     std::cout << "Total terms (with repetition): " << total_terms << std::endl;
