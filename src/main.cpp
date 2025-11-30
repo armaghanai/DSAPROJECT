@@ -40,6 +40,7 @@ int main() {
             lexicon.add_word(token, 1);
         }
     }
+    lexicon.save_to_csv(indices_path+"lexicon.csv");
     std::cout << "Lexicon size: " << lexicon.get_size() << " unique words" << std::endl;
 
     // =================== Step 5: Build Forward Index ===================
