@@ -18,6 +18,7 @@ class LexiconBuilder
         size_t get_size()const;
         void save_to_csv(const std::string& csv_path);
         bool load_from_csv(const std::string& csv_path);
+        std::unordered_map<uint32_t,std::string>build_reverse_lexicon();
         void clear_lexicon();
 
     

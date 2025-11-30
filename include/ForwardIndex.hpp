@@ -50,6 +50,8 @@ public:
     
     // Get document index by doc_id
     const DocumentIndex* get_document(const std::string& doc_id) const;
+
+   std::unordered_map<std::string, DocumentIndex> get_forward_index() const;
     
     // Get all terms for a specific document
     const std::vector<TermPosting>* get_document_terms(const std::string& doc_id) const;

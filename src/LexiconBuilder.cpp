@@ -156,6 +156,16 @@ bool LexiconBuilder::load_from_csv(const std::string& csv_path)
     return true;
 }
 
+std::unordered_map<uint32_t,std::string> LexiconBuilder::build_reverse_lexicon()
+{
+    std::unordered_map<uint32_t,std::string> reverse_lexicon;
+   
+    for(auto& [word,details]:lexicon_data)
+        reverse_lexicon[details.first]=word;
+
+    return reverse_lexicon;
+}
+
 void LexiconBuilder::clear_lexicon()
 {
     // simply resets the entire lexicon and id counter

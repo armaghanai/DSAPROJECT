@@ -239,6 +239,10 @@ void ForwardIndex::save_to_csv(const std::string& file_path)
     out.close();
     std::cout << "CSV for forward index saved to " << file_path << "\n";
 }
+std::unordered_map<std::string, DocumentIndex> ForwardIndex:: get_forward_index() const
+ {
+    return forward_index;
+ }
 std::unordered_map<std::string, uint32_t> ForwardIndex::get_doc_id_map()
 {
     return doc_id_map;
