@@ -36,8 +36,6 @@ InvertedIndex::get_terms(uint32_t word_id)
     if (!barrel_metadata.empty()) {
         int barrel_idx = find_barrel_index(word_id);
         if (barrel_idx != -1) {
-            // Note: This requires reverse_lex, which we don't have here
-            // In practice, you should call load_barrel_for_word() before get_terms()
             std::cerr << "Warning: Word " << word_id << " not loaded. "
                      << "Call load_barrel_for_word() first.\n";
         }
@@ -209,7 +207,7 @@ void InvertedIndex::clear()
     currently_loaded_barrel = -1;
 }
 
-// ========== NEW BARREL METHODS ==========
+// ========== BARREL METHODS ==========
 
 bool InvertedIndex::create_barrels(
     const std::string& barrel_dir,
@@ -221,14 +219,12 @@ bool InvertedIndex::create_barrels(
         return false;
     }
     
-    // Create barrel directory
     if (!fs::exists(barrel_dir)) {
         fs::create_directories(barrel_dir);
     }
     
     std::cout << "\n=== Creating " << num_barrels << " Barrels ===\n";
     
-    // Find min and max word_id
     uint32_t min_word_id = UINT32_MAX;
     uint32_t max_word_id = 0;
     
@@ -240,26 +236,21 @@ bool InvertedIndex::create_barrels(
     std::cout << "Word ID range: " << min_word_id << " - " << max_word_id << "\n";
     std::cout << "Total unique words: " << inverted_index.size() << "\n";
     
-    // Calculate range per barrel
     uint32_t total_range = max_word_id - min_word_id + 1;
     uint32_t range_per_barrel = (total_range + num_barrels - 1) / num_barrels;
     
     std::cout << "Range per barrel: ~" << range_per_barrel << " word IDs\n\n";
     
-    // Clear and prepare metadata
     barrel_metadata.clear();
     
-    // Create each barrel
     for (uint32_t barrel_id = 0; barrel_id < num_barrels; ++barrel_id) {
         uint32_t start_id = min_word_id + (barrel_id * range_per_barrel);
         uint32_t end_id = start_id + range_per_barrel - 1;
         
-        // Last barrel takes remaining range
         if (barrel_id == num_barrels - 1) {
             end_id = max_word_id;
         }
         
-        // Filter words in this range
         std::unordered_map<uint32_t, std::vector<std::pair<uint32_t, uint32_t>>> barrel_data;
         
         for (const auto& [word_id, postings] : inverted_index) {
@@ -273,7 +264,6 @@ bool InvertedIndex::create_barrels(
             continue;
         }
         
-        // Write barrel file
         std::string barrel_filename = "inverted_barrel_" + std::to_string(barrel_id) + ".bin";
         std::string barrel_path = barrel_dir + "/" + barrel_filename;
         
@@ -283,16 +273,13 @@ bool InvertedIndex::create_barrels(
             return false;
         }
         
-        // Write barrel header
         out.write(reinterpret_cast<const char*>(&barrel_id), sizeof(barrel_id));
         out.write(reinterpret_cast<const char*>(&start_id), sizeof(start_id));
         out.write(reinterpret_cast<const char*>(&end_id), sizeof(end_id));
         
-        // Write number of words in this barrel
         uint32_t num_words = barrel_data.size();
         out.write(reinterpret_cast<const char*>(&num_words), sizeof(num_words));
         
-        // Write each word's data
         for (const auto& [word_id, postings] : barrel_data) {
             out.write(reinterpret_cast<const char*>(&word_id), sizeof(word_id));
             
@@ -312,7 +299,6 @@ bool InvertedIndex::create_barrels(
         
         out.close();
         
-        // Save metadata
         BarrelMetadata meta;
         meta.barrel_id = barrel_id;
         meta.start_word_id = start_id;
@@ -325,7 +311,6 @@ bool InvertedIndex::create_barrels(
                   << barrel_filename << "\n";
     }
     
-    // Save barrel metadata file
     std::string metadata_path = barrel_dir + "/barrel_metadata.bin";
     std::ofstream meta_out(metadata_path, std::ios::binary);
     if (!meta_out.is_open()) {
@@ -429,7 +414,6 @@ bool InvertedIndex::load_barrel_by_index(
         return false;
     }
     
-    // Check if already loaded
     if (currently_loaded_barrel == barrel_idx) {
         return true;
     }
@@ -443,20 +427,16 @@ bool InvertedIndex::load_barrel_by_index(
         return false;
     }
     
-    // Clear current data
     inverted_index.clear();
     
-    // Read barrel header
     uint32_t barrel_id, start_id, end_id;
     in.read(reinterpret_cast<char*>(&barrel_id), sizeof(barrel_id));
     in.read(reinterpret_cast<char*>(&start_id), sizeof(start_id));
     in.read(reinterpret_cast<char*>(&end_id), sizeof(end_id));
     
-    // Read number of words
     uint32_t num_words;
     in.read(reinterpret_cast<char*>(&num_words), sizeof(num_words));
     
-    // Read each word
     for (uint32_t i = 0; i < num_words; ++i) {
         uint32_t word_id;
         in.read(reinterpret_cast<char*>(&word_id), sizeof(word_id));
@@ -513,4 +493,50 @@ void InvertedIndex::print_barrel_info() const
     }
     
     std::cout << "=========================\n\n";
+}
+
+// ========== CSV EXPORT METHOD ==========
+
+bool InvertedIndex::export_barrels_to_csv(
+    const std::string& barrel_dir,
+    const std::unordered_map<uint32_t, std::string>& reverse_lex)
+{
+    if (barrel_metadata.empty()) {
+        std::cerr << "Error: No barrels loaded. Call load_barrel_metadata() first.\n";
+        return false;
+    }
+    
+    std::cout << "\n=== Exporting Barrels to CSV ===\n";
+    
+    for (size_t i = 0; i < barrel_metadata.size(); ++i) {
+        std::unordered_map<uint32_t, std::string> temp_reverse_lex = reverse_lex;
+        
+        if (!const_cast<InvertedIndex*>(this)->load_barrel_by_index(static_cast<int>(i), temp_reverse_lex)) {
+            std::cerr << "Failed to load barrel " << i << "\n";
+            continue;
+        }
+        
+        std::string csv_path = barrel_dir + "/inverted_barrel_" + std::to_string(i) + ".csv";
+        std::ofstream out(csv_path);
+        if (!out.is_open()) {
+            std::cerr << "Cannot create " << csv_path << "\n";
+            continue;
+        }
+        
+        out << "word_id,word,doc_id,frequency\n";
+        
+        for (const auto& [word_id, postings] : inverted_index) {
+            const std::string& word = temp_reverse_lex[word_id];
+            for (const auto& [doc_id, freq] : postings) {
+                out << word_id << "," << word << "," << doc_id << "," << freq << "\n";
+            }
+        }
+        
+        out.close();
+        std::cout << "Exported Barrel " << i << " to CSV: " 
+                  << inverted_index.size() << " words\n";
+    }
+    
+    std::cout << "=== Export Complete ===\n";
+    return true;
 }

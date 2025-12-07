@@ -58,7 +58,8 @@ class InvertedIndex
         // Call this once at startup instead of loading entire index
         bool load_barrel_metadata(const std::string& barrel_dir);
         
-      
+        // Load specific barrel containing a word_id
+        // Automatically called when you need to query a word
         bool load_barrel_for_word(uint32_t word_id,
                                  std::unordered_map<uint32_t, std::string>& reverse_lex);
         
@@ -67,4 +68,8 @@ class InvertedIndex
         
         // Print barrel statistics
         void print_barrel_info() const;
+        
+        // Export all barrels to CSV format (for submission/inspection)
+        bool export_barrels_to_csv(const std::string& barrel_dir,
+                                  const std::unordered_map<uint32_t, std::string>& reverse_lex);
 };
