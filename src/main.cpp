@@ -1,170 +1,109 @@
-#include "../include/metadataparser.hpp"
-#include "../include/TextPreProcessor.hpp"
+#include "../include/SearchEngine.hpp"
 #include "../include/LexiconBuilder.hpp"
 #include "../include/ForwardIndex.hpp"
 #include "../include/InvertedIndex.hpp"
+#include "../include/TextPreProcessor.hpp"
 
 #include <iostream>
-#include <iomanip>
 #include <string>
-#include <vector>
-#include <unordered_map>
-#include <algorithm>
 
 int main() {
     // =================== Configuration ===================
-    std::string dataset_path = "D:\\THird Semester\\DSA\\dsaspp\\DSAPROJECT\\data\\2020-04-10";
     std::string indices_path = "D:\\THird Semester\\DSA\\dsaspp\\DSAPROJECT\\indices\\";
     std::string barrel_path = indices_path + "inverted_index_barrels";
     
-    const int MAX_DOCS = 2000;  // Only process 2000 documents
-
-    // =================== Step 1: Parse Metadata ===================
-    std::cout << "=== Parsing Metadata ===" << std::endl;
-    MetadataParser parser(dataset_path);
-    parser.metadata_parse();
+    std::cout << "=== Loading Search Engine (2000 Documents) ===" << std::endl;
     
-    // Get only first 2000 papers
-    auto all_papers = parser.getPapers();
-    int actual_limit = std::min(MAX_DOCS, (int)all_papers.size());
-    std::vector<Paper> papers_subset(all_papers.begin(), 
-                                     all_papers.begin() + actual_limit);
-    
-    std::cout << "Total papers parsed: " << all_papers.size() << std::endl;
-    std::cout << "Using only first " << papers_subset.size() << " documents for indexing" << std::endl;
-
-    // =================== Step 2: Build Lexicon (2000 docs only) ===================
-    std::cout << "\n=== Building Lexicon from " << papers_subset.size() << " documents ===" << std::endl;
-    TextPreprocessor preprocessor;
+    // =================== Step 1: Load Lexicon ===================
+    std::cout << "\n[1/4] Loading Lexicon..." << std::endl;
     LexiconBuilder lexicon;
-    
-    for (const auto& paper : papers_subset) {
-        std::vector<std::string> tokens = preprocessor.preprocess(paper.body_text);
-        for (const auto& token : tokens) {
-            lexicon.add_word(token, 1);
-        }
+    if (!lexicon.load_from_csv(indices_path + "lexicon.csv")) {
+        std::cerr << "Error: Failed to load lexicon!" << std::endl;
+        return 1;
     }
+    std::cout << "✓ Lexicon loaded: " << lexicon.get_size() << " words" << std::endl;
     
-    lexicon.save_to_csv(indices_path + "lexicon.csv");
-    std::cout << "Lexicon size: " << lexicon.get_size() << " unique words" << std::endl;
-
-    // =================== Step 3: Build Forward Index (2000 docs only) ===================
-    std::cout << "\n=== Building Forward Index ===" << std::endl;
+    // =================== Step 2: Load Forward Index ===================
+    std::cout << "\n[2/4] Loading Forward Index..." << std::endl;
     ForwardIndex forward_index;
-    int processed_docs = 0;
-    
-    for (const auto& paper : papers_subset) {
-        std::vector<std::string> tokens = preprocessor.preprocess(paper.body_text);
-        std::vector<uint32_t> word_ids;
-        word_ids.reserve(tokens.size());
-
-        for (const auto& token : tokens) {
-            uint32_t word_id = lexicon.get_word_id(token);
-            if (word_id != UINT32_MAX) {
-                word_ids.push_back(word_id);
-            }
-        }
-
-        if (!word_ids.empty()) {
-            forward_index.add_document(paper.paper_id, paper.title, paper.abstract_text, word_ids);
-            processed_docs++;
-            if (processed_docs % 500 == 0) {
-                std::cout << "Processed " << processed_docs << " documents..." << std::endl;
-            }
-        }
+    if (!forward_index.load_from_binary(indices_path + "forward_index.bin")) {
+        std::cerr << "Error: Failed to load forward index!" << std::endl;
+        return 1;
     }
-    
-    std::cout << "Forward index built successfully!" << std::endl;
+    std::cout << "✓ Forward index loaded" << std::endl;
     forward_index.print_statistics();
-    forward_index.save_to_binary(indices_path + "forward_index.bin");
-
-    // =================== Step 4: Build Inverted Index (2000 docs only) ===================
-    std::cout << "\n=== Building Inverted Index ===" << std::endl;
-    std::unordered_map<uint32_t, std::string> reverse_lex = lexicon.build_reverse_lexicon();
+    
+    // =================== Step 3: Load Inverted Index (Barrels) ===================
+    std::cout << "\n[3/4] Loading Inverted Index Barrels..." << std::endl;
     InvertedIndex inverted_index;
-
-    for (const auto& [doc_id_str, doc_num_id] : forward_index.get_doc_id_map()) {
-        const DocumentIndex* doc = forward_index.get_document(doc_id_str);
-        if (!doc) continue;
-
-        std::vector<std::pair<uint32_t, uint32_t>> terms;
-        for (const auto& t : doc->terms) {
-            terms.emplace_back(t.word_id, t.frequency);
-        }
-        inverted_index.add_document(doc_num_id, terms);
+    if (!inverted_index.load_barrel_metadata(barrel_path)) {
+        std::cerr << "Error: Failed to load barrel metadata!" << std::endl;
+        return 1;
     }
-
-    inverted_index.save_to_binary(indices_path + "inverted_index.bin", reverse_lex);
-    inverted_index.print_statistics();
-
-    // =================== Step 5: Create Barrels (2000 docs) ===================
-    std::cout << "\n=== Creating Barrels ===" << std::endl;
-    inverted_index.create_barrels(barrel_path, reverse_lex, 4);
+    std::cout << "✓ Barrel metadata loaded" << std::endl;
     inverted_index.print_barrel_info();
-
-    // =================== Step 6: Export Barrels to CSV for Submission ===================
-    std::cout << "\n=== Exporting Barrels to CSV ===" << std::endl;
     
-    // Load metadata and export each barrel to CSV
-    InvertedIndex export_idx;
-    export_idx.load_barrel_metadata(barrel_path);
+    // =================== Step 4: Initialize Search Engine ===================
+    std::cout << "\n[4/4] Initializing Search Engine..." << std::endl;
+    TextPreprocessor preprocessor;
+    SearchEngine search_engine(&lexicon, &forward_index, &inverted_index, &preprocessor);
     
-    for (int i = 0; i < 4; i++) {
-        // Load barrel i
-        uint32_t test_word_id = i * (lexicon.get_size() / 4);  // Get a word from this barrel
-        export_idx.load_barrel_for_word(test_word_id, reverse_lex);
+    // =================== Interactive Search Loop ===================
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "COVID-19 RESEARCH PAPER SEARCH ENGINE" << std::endl;
+    std::cout << "Searching through 2000 research papers" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    
+    while (true) {
+        std::cout << "\nEnter your search query (or 'quit' to exit): ";
+        std::string query;
+        std::getline(std::cin, query);
         
-        // Export to CSV
-        std::string csv_path = barrel_path + "/inverted_barrel_" + std::to_string(i) + ".csv";
-        std::ofstream csv_out(csv_path);
-        csv_out << "word_id,word,doc_id,frequency\n";
-        
-        auto barrel_data = export_idx.get_inverted_index();
-        for (const auto& [word_id, postings] : barrel_data) {
-            std::string word = reverse_lex[word_id];
-            for (const auto& [doc_id, freq] : postings) {
-                csv_out << word_id << "," << word << "," << doc_id << "," << freq << "\n";
-            }
+        if (query == "quit" || query == "exit" || query == "q") {
+            std::cout << "Exiting search engine. Goodbye!" << std::endl;
+            break;
         }
-        csv_out.close();
-        std::cout << "Exported Barrel " << i << " to CSV (" << barrel_data.size() << " words)" << std::endl;
-    }
-
-    // =================== Step 7: Test Barrel Queries ===================
-    std::cout << "\n=== Testing Barrel Queries ===" << std::endl;
-    
-    InvertedIndex query_idx;
-    query_idx.load_barrel_metadata(barrel_path);
-    query_idx.print_barrel_info();
-
-    // Test with actual words from lexicon
-    std::vector<std::string> test_words = {"virus", "infection", "cells", "protein", "patients"};
-    
-    std::cout << "\n=== Testing Words ===" << std::endl;
-    for (const auto& word : test_words) {
-        uint32_t word_id = lexicon.get_word_id(word);
         
-        if (word_id == UINT32_MAX) {
-            std::cout << "Word '" << word << "' not found in lexicon" << std::endl;
+        if (query.empty()) {
             continue;
         }
         
-        std::cout << "\n--- Searching: '" << word << "' (ID: " << word_id << ") ---" << std::endl;
-        query_idx.load_barrel_for_word(word_id, reverse_lex);
+        // Perform search
+        auto results = search_engine.search(query, 10); // Get top 10 results
         
-        const auto* postings = query_idx.get_terms(word_id);
+        // Display results
+        search_engine.print_results(results);
         
-        if (postings) {
-            std::cout << "Found in " << postings->size() << " documents" << std::endl;
+        // Ask if user wants to see full document
+        if (!results.empty()) {
+            std::cout << "\nEnter result number to view full details (or press Enter to continue): ";
+            std::string choice;
+            std::getline(std::cin, choice);
             
-            size_t count = 0;
-            for (const auto& [doc_id, freq] : *postings) {
-                std::cout << "  Doc " << doc_id << ": " << freq << " times" << std::endl;
-                if (++count >= 5) break;
+            if (!choice.empty()) {
+                try {
+                    int idx = std::stoi(choice) - 1;
+                    if (idx >= 0 && idx < static_cast<int>(results.size())) {
+                        const auto& result = results[idx];
+                        const DocumentIndex* doc = search_engine.get_document(result.doc_id);
+                        
+                        if (doc) {
+                            std::cout << "\n" << std::string(80, '=') << std::endl;
+                            std::cout << "FULL DOCUMENT DETAILS" << std::endl;
+                            std::cout << std::string(80, '=') << std::endl;
+                            std::cout << "Title: " << doc->title << std::endl;
+                            std::cout << "Doc ID: " << doc->doc_id << std::endl;
+                            std::cout << "Document Length: " << doc->doc_length << " terms" << std::endl;
+                            std::cout << "\nAbstract:\n" << doc->abstract_text << std::endl;
+                            std::cout << "\n" << std::string(80, '=') << std::endl;
+                        }
+                    }
+                } catch (...) {
+                    std::cout << "Invalid selection." << std::endl;
+                }
             }
         }
     }
-
-    std::cout << "\n=== Processing Complete for " << papers_subset.size() << " documents ===" << std::endl;
+    
     return 0;
 }
