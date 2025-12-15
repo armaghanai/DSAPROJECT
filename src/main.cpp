@@ -5,6 +5,7 @@
 #include "../include/ForwardIndex.hpp"
 #include "../include/InvertedIndex.hpp"
 #include "../include/TextPreProcessor.hpp"
+#include "../include/Trie.hpp"
 
 #include <iostream>
 #include <string>
@@ -17,7 +18,7 @@ int main() {
     std::string indices_path = "D:\\3RD SEMESTER\\Data Structures and Algorithms\\dsa search engine\\DSA-Searh-Engine\\indices\\";
     std::string barrel_path = indices_path + "inverted_index_barrels";
     std::string binary_embedding_file = 
-    "D:\\3RD SEMESTER\\Data Structures and Algorithms\\dsa search engine\\DSA-Searh-Engine\\embeddings\\glove.6B\\glove.6B.300d.bin";
+    "D:\\3RD SEMESTER\\Data Structures and Algorithms\\dsa search engine\\DSA-Searh-Engine\\embeddings\\glove.6B.300d.bin";
     
     // Verify paths exist
     if (!std::filesystem::exists(indices_path)) {
@@ -111,7 +112,7 @@ int main() {
     
     auto emb_end = std::chrono::high_resolution_clock::now();
     auto emb_duration = std::chrono::duration_cast<std::chrono::milliseconds>(emb_end - emb_start);
-    std::cout << "✓ Embeddings loaded in " << emb_duration.count() << " ms\n" << std::endl;
+    std::cout << "Embeddings loaded in " << emb_duration.count() << " ms\n" << std::endl;
     
     // =================== Initialize Semantic Search Engine ===================
     std::cout << "[7/7] Initializing Semantic Search Engine..." << std::endl;
@@ -119,7 +120,7 @@ int main() {
     
     // Set hybrid search weights (60% semantic, 40% BM25)
     semantic_engine.set_weights(0.6f, 0.4f);
-    std::cout << "✓ All engines ready!\n" << std::endl;
+    std::cout << "All engines ready!\n" << std::endl;
     
     // =================== Interactive Search Loop ===================
     std::cout << std::string(100, '=') << std::endl;
@@ -127,7 +128,16 @@ int main() {
     std::cout << "Searching through " << forward_index.get_forward_index().size() 
               << " research papers" << std::endl;
     std::cout << std::string(100, '=') << std::endl;
+
+    std::cout << "[AUTOCOMPLETE] Building Trie for word suggestions..." << std::endl;
+    Trie autocomplete_trie;
     
+    // Build Trie from lexicon
+    auto lexicon_data = lexicon.get_lexicon_data();
+    autocomplete_trie.build_from_lexicon(lexicon_data);
+    autocomplete_trie.print_statistics();
+    
+    // =================== Enhanced Search Loop with Autocomplete ===================
     std::string query;
     int search_mode = 0;
     
@@ -137,9 +147,10 @@ int main() {
         std::cout << "[1] BM25 Keyword Search (Fast, Exact Match)" << std::endl;
         std::cout << "[2] Semantic Search (Meaning-Based)" << std::endl;
         std::cout << "[3] Hybrid Search (BM25 + Semantic - Recommended)" << std::endl;
+        std::cout << "[4] Try Autocomplete (Test word suggestions)" << std::endl;
         std::cout << "[0] Exit" << std::endl;
         std::cout << std::string(100, '-') << std::endl;
-        std::cout << "Select search mode (0-3): ";
+        std::cout << "Select search mode (0-4): ";
         
         if (!(std::cin >> search_mode)) {
             break;
@@ -151,16 +162,68 @@ int main() {
             break;
         }
         
-        if (search_mode < 1 || search_mode > 3) {
-            std::cout << "Invalid option. Please select 0-3." << std::endl;
+        // =================== NEW: Autocomplete Demo Mode ===================
+        if (search_mode == 4) {
+            std::cout << "\n=== AUTOCOMPLETE DEMO ===" << std::endl;
+            std::cout << "Enter a word prefix (or 'back' to return): ";
+            
+            std::string prefix;
+            std::getline(std::cin, prefix);
+            
+            if (prefix == "back" || prefix.empty()) {
+                continue;
+            }
+            
+            auto suggestions = autocomplete_trie.autocomplete(prefix, 10);
+            
+            if (suggestions.empty()) {
+                std::cout << "\nNo suggestions found for prefix: '" << prefix << "'" << std::endl;
+            } else {
+                std::cout << "\nTop " << suggestions.size() 
+                         << " suggestions for '" << prefix << "':" << std::endl;
+                std::cout << std::string(80, '-') << std::endl;
+                
+                for (size_t i = 0; i < suggestions.size(); i++) {
+                    std::cout << std::setw(2) << (i + 1) << ". " 
+                             << std::left << std::setw(30) << suggestions[i].first 
+                             << " (freq: " << suggestions[i].second << ")" << std::endl;
+                }
+            }
+            
+            continue; // Go back to menu
+        }
+        
+        if (search_mode < 1 || search_mode > 4) {
+            std::cout << "Invalid option. Please select 0-4." << std::endl;
             continue;
         }
         
-        std::cout << "\nEnter your search query: ";
-        if (!std::getline(std::cin, query) || query.empty()) {
+        // =================== Enhanced Query Input with Live Suggestions ===================
+        std::cout << "\nEnter your search query (type slowly to see suggestions): ";
+        std::getline(std::cin, query);
+        
+        if (query.empty()) {
             std::cout << "Empty query. Try again." << std::endl;
             continue;
         }
+        
+        // Show autocomplete for last word being typed
+        std::istringstream iss(query);
+        std::string last_word;
+        while (iss >> last_word) {} // Get last word
+        
+        if (!last_word.empty() && last_word.length() >= 2) {
+            auto quick_suggestions = autocomplete_trie.autocomplete(last_word, 5);
+            if (!quick_suggestions.empty()) {
+                std::cout << "\nDid you mean: ";
+                for (size_t i = 0; i < std::min(size_t(3), quick_suggestions.size()); i++) {
+                    std::cout << "'" << quick_suggestions[i].first << "' ";
+                }
+                std::cout << "?" << std::endl;
+            }
+        }
+        
+        // ... (rest of your search code remains the same)
         
         // Preprocess query
         std::vector<std::string> query_tokens = preprocessor.preprocess(query);
