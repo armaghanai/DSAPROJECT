@@ -1,5 +1,6 @@
 data/
 build/
 indices/
+embeddings/
 
 .vscode/

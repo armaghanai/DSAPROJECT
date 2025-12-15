@@ -181,7 +181,9 @@ bool LexiconBuilder::load_from_csv(const std::string& csv_path)
     
     return true;
 }
-
+std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> LexiconBuilder::get_lexicon_data()const{
+    return lexicon_data;
+}
 // NEW const method for getting reverse lexicon
 std::unordered_map<uint32_t, std::string> LexiconBuilder::get_reverse_lexicon() const
 {

@@ -26,7 +26,9 @@ SearchEngine::SearchEngine(LexiconBuilder* lex,
     std::cout << "================================\n" << std::endl;
 }
 
-std::vector<SearchResult> SearchEngine::search(const std::string& query, int top_k) {
+std::vector<SearchResult> SearchEngine::search(const std::string& query, int top_k) 
+{
+    clock_t start = clock();
     std::vector<SearchResult> results;
     
     // Step 1: Preprocess query (same as we did for documents)
@@ -142,7 +144,8 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query, int top
         
         results.push_back(result);
     }
-    
+    clock_t end = clock();
+    std::cout<<"Searched in "<<end-start<<" ms\n";
     // Step 5: Sort by score and return top K
     std::cout << "\n[Step 5] Sorting and selecting top " << top_k << " results..." << std::endl;
     std::sort(results.begin(), results.end(), 
