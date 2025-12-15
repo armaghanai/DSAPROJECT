@@ -9,22 +9,26 @@
 
 int main() {
     // =================== Configuration ===================
-    std::string indices_path = "D:\\THird Semester\\DSA\\dsaspp\\DSAPROJECT\\indices\\";
+    std::string indices_path = 
+    "D:\\3RD SEMESTER\\Data Structures and Algorithms\\dsa search engine\\DSA-Searh-Engine\\indices\\";
     std::string barrel_path = indices_path + "inverted_index_barrels";
     
-    std::cout << "=== Loading Search Engine (2000 Documents) ===" << std::endl;
+    std::cout << "=== Search Engine Setup (2000 Documents) ===" << std::endl;
     
     // =================== Step 1: Load Lexicon ===================
-    std::cout << "\n[1/4] Loading Lexicon..." << std::endl;
+    std::cout << "\n[1/5] Loading Lexicon..." << std::endl;
     LexiconBuilder lexicon;
     if (!lexicon.load_from_csv(indices_path + "lexicon.csv")) {
         std::cerr << "Error: Failed to load lexicon!" << std::endl;
         return 1;
     }
-    std::cout << "✓ Lexicon loaded: " << lexicon.get_size() << " words" << std::endl;
+    std::cout << "Lexicon loaded: " << lexicon.get_size() << " words" << std::endl;
+    
+    // Get reverse lexicon (word_id -> word mapping)
+    std::unordered_map<uint32_t, std::string> reverse_lex = lexicon.build_reverse_lexicon();
     
     // =================== Step 2: Load Forward Index ===================
-    std::cout << "\n[2/4] Loading Forward Index..." << std::endl;
+    std::cout << "\n[2/5] Loading Forward Index..." << std::endl;
     ForwardIndex forward_index;
     if (!forward_index.load_from_binary(indices_path + "forward_index.bin")) {
         std::cerr << "Error: Failed to load forward index!" << std::endl;
@@ -33,18 +37,27 @@ int main() {
     std::cout << "✓ Forward index loaded" << std::endl;
     forward_index.print_statistics();
     
-    // =================== Step 3: Load Inverted Index (Barrels) ===================
-    std::cout << "\n[3/4] Loading Inverted Index Barrels..." << std::endl;
+    // =================== Step 3: Load Full Inverted Index ===================
+    std::cout << "\n[3/5] Loading Full Inverted Index..." << std::endl;
     InvertedIndex inverted_index;
+    if (!inverted_index.load_from_binary(indices_path + "inverted_index.bin", reverse_lex)) {
+        std::cerr << "Error: Failed to load inverted index!" << std::endl;
+        return 1;
+    }
+    std::cout << "Inverted index loaded" << std::endl;
+    inverted_index.print_statistics();
+    
+    
     if (!inverted_index.load_barrel_metadata(barrel_path)) {
         std::cerr << "Error: Failed to load barrel metadata!" << std::endl;
         return 1;
     }
-    std::cout << "✓ Barrel metadata loaded" << std::endl;
+    
+    std::cout << "✓ Barrel metadata verified" << std::endl;
     inverted_index.print_barrel_info();
     
-    // =================== Step 4: Initialize Search Engine ===================
-    std::cout << "\n[4/4] Initializing Search Engine..." << std::endl;
+    // =================== Step 7: Initialize Search Engine ===================
+    std::cout << "\n=== Initializing Search Engine ===" << std::endl;
     TextPreprocessor preprocessor;
     SearchEngine search_engine(&lexicon, &forward_index, &inverted_index, &preprocessor);
     
@@ -52,6 +65,7 @@ int main() {
     std::cout << "\n" << std::string(80, '=') << std::endl;
     std::cout << "COVID-19 RESEARCH PAPER SEARCH ENGINE" << std::endl;
     std::cout << "Searching through 2000 research papers" << std::endl;
+    std::cout << "Using Barrel-based Inverted Index" << std::endl;
     std::cout << std::string(80, '=') << std::endl;
     
     while (true) {

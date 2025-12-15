@@ -342,7 +342,7 @@ bool InvertedIndex::create_barrels(
 
 bool InvertedIndex::load_barrel_metadata(const std::string& barrel_dir)
 {
-    std::string metadata_path = barrel_dir + "/barrel_metadata.bin";
+    std::string metadata_path = barrel_dir + "\\barrel_metadata.bin";
     
     std::ifstream in(metadata_path, std::ios::binary);
     if (!in.is_open()) {
@@ -516,7 +516,7 @@ bool InvertedIndex::export_barrels_to_csv(
             continue;
         }
         
-        std::string csv_path = barrel_dir + "/inverted_barrel_" + std::to_string(i) + ".csv";
+        std::string csv_path = barrel_dir + "\\inverted_barrel_" + std::to_string(i) + ".csv";
         std::ofstream out(csv_path);
         if (!out.is_open()) {
             std::cerr << "Cannot create " << csv_path << "\n";
