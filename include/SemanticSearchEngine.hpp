@@ -3,7 +3,7 @@
 #include "SemanticSearchResult.hpp"
 
 class SemanticSearchEngine {
-private:
+protected:
     WordEmbeddingsEngine* embedding_engine;
     SearchEngine* bm25_engine;
     
@@ -22,7 +22,7 @@ public:
     void set_weights(float semantic_w, float bm25_w);
     
     // Pure semantic search using word embeddings
-    std::vector<SemanticSearchResult> semantic_search(const std::string& query,const std::vector<std::string>& query_tokens,
+    virtual std::vector<SemanticSearchResult> semantic_search(const std::string& query,const std::vector<std::string>& query_tokens,
     const ForwardIndex* forward_index,int top_k = 10);
     
     // Hybrid search: BM25 + Semantic
@@ -33,7 +33,7 @@ public:
     // Print semantic search results
     void print_semantic_results(const std::vector<SemanticSearchResult>& results) const;
 
-private:
+protected:
             std::vector<float> get_document_embedding(const std::string& doc_id,const DocumentIndex& doc_index);
 
 };

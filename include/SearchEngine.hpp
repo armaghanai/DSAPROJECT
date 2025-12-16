@@ -26,7 +26,7 @@ struct SearchResult {
 };
 
 class SearchEngine {
-private:
+protected:
     // Core components
     LexiconBuilder* lexicon;
     ForwardIndex* forward_index;
@@ -52,7 +52,7 @@ public:
                  TextPreprocessor* prep);
     
     // Main search function - returns top_k results for a query
-    std::vector<SearchResult> search(const std::string& query, int top_k = 10);
+    virtual std::vector<SearchResult> search(const std::string& query, int top_k = 10);
     
     // Helper: Get document details by doc_id
     const DocumentIndex* get_document(const std::string& doc_id) const;
