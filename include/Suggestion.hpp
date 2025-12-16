@@ -1,3 +1,6 @@
+#include <string>
+#include <cstdint>
+
 struct Suggestion {
     std::string word;
     uint32_t frequency;

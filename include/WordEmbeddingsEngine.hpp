@@ -40,7 +40,7 @@ public:
         const std::string& embedding_file,
         const std::unordered_set<std::string>& lexicon_words);
 
-      bool load_embeddings_binary(const std::string& binary_file);
+    bool load_embeddings_binary(const std::string& binary_file);
     
 private:
      // Normalize vector to unit length (L2 norm)

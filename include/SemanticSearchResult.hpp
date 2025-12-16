@@ -1,4 +1,7 @@
 // SemanticSearchResult.hpp
+#include <string>
+#include <vector>
+
 struct SemanticSearchResult {
     std::string doc_id;
     std::string title;
