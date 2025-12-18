@@ -3,5 +3,5 @@ build/
 indices/
 embeddings/
 node_modules/
-
+external/
 .vscode/

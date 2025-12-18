@@ -67,6 +67,12 @@ private:
                          const std::vector<uint32_t>& query_word_ids,
                          const std::unordered_map<uint32_t, uint32_t>& query_term_freq);
     
-    // Calculate IDF (Inverse Document Frequency) for a term
+    double calculate_bm25_optimized(
+    const std::string& doc_id_str,
+    const std::vector<uint32_t>& query_word_ids,
+    const std::unordered_map<uint32_t, uint32_t>& query_term_freq,
+    const std::unordered_map<uint32_t, double>& idf_cache);
+    
     double calculate_idf(uint32_t word_id, uint32_t doc_frequency);
+    
 };

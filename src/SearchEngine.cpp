@@ -2,6 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #include <queue>
+#include <chrono>
 
 SearchEngine::SearchEngine(LexiconBuilder* lex, 
                            ForwardIndex* fwd_idx, 
@@ -28,7 +29,7 @@ SearchEngine::SearchEngine(LexiconBuilder* lex,
 
 std::vector<SearchResult> SearchEngine::search(const std::string& query, int top_k) 
 {
-    clock_t start = clock();
+    auto search_start = std::chrono::high_resolution_clock::now();
     std::vector<SearchResult> results;
     
     // Step 1: Preprocess query (same as we did for documents)
@@ -69,14 +70,35 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query, int top
     std::cout << "Valid query terms: " << query_word_ids.size() << std::endl;
     
     // Step 3: Load barrels and retrieve candidate documents
-    std::cout << "\n[Step 3] Retrieving candidate documents..." << std::endl;
+    // ✅ OPTIMIZATION: Batch load all needed barrels ONCE
+    auto barrel_start = std::chrono::high_resolution_clock::now();
+    std::cout << "\n[Step 3] Loading barrels..." << std::endl;
+    
+    std::unordered_set<int> barrels_needed;
+    for (uint32_t word_id : query_word_ids) {
+        int barrel_idx = inverted_index->find_barrel_index(word_id);
+        if (barrel_idx != -1) {
+            barrels_needed.insert(barrel_idx);
+        }
+    }
+    
+    std::cout << "  Barrels needed: " << barrels_needed.size() << std::endl;
+    
+    // Load each unique barrel only once
+    for (int barrel_idx : barrels_needed) {
+        inverted_index->load_barrel_by_index(barrel_idx, reverse_lexicon);
+    }
+    
+    auto barrel_end = std::chrono::high_resolution_clock::now();
+    auto barrel_time = std::chrono::duration_cast<std::chrono::milliseconds>(barrel_end - barrel_start);
+    std::cout << "  [Barrel loading time: " << barrel_time.count() << " ms]" << std::endl;
+    
+    // Retrieve candidate documents
+    std::cout << "\n[Step 4] Retrieving candidate documents..." << std::endl;
     std::unordered_set<uint32_t> candidate_docs; // Set of document internal IDs
     
     for (uint32_t word_id : query_word_ids) {
-        // Load the barrel containing this word
-        inverted_index->load_barrel_for_word(word_id, reverse_lexicon);
-        
-        // Get posting list for this word
+        // Get posting list for this word (already loaded)
         const auto* postings = inverted_index->get_terms(word_id);
         
         if (postings) {
@@ -97,8 +119,9 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query, int top
         return results;
     }
     
-    // Step 4: Calculate BM25 scores for all candidates
-    std::cout << "\n[Step 4] Calculating BM25 scores..." << std::endl;
+    // Step 5: Calculate BM25 scores for all candidates
+    auto scoring_start = std::chrono::high_resolution_clock::now();
+    std::cout << "\n[Step 5] Calculating BM25 scores..." << std::endl;
     
     // Get doc_id_map to convert internal IDs to doc_id strings
     auto doc_id_map = forward_index->get_doc_id_map();
@@ -107,6 +130,19 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query, int top
     std::unordered_map<uint32_t, std::string> reverse_doc_map;
     for (const auto& [doc_id_str, internal_id] : doc_id_map) {
         reverse_doc_map[internal_id] = doc_id_str;
+    }
+    
+    // ✅ OPTIMIZATION: Pre-compute IDF values once per query term
+    std::unordered_map<uint32_t, double> idf_cache;
+    std::unordered_map<uint32_t, uint32_t> doc_freq_cache;
+    
+    for (uint32_t word_id : query_word_ids) {
+        const auto* postings = inverted_index->get_terms(word_id);
+        uint32_t doc_frequency = postings ? postings->size() : 0;
+        if (doc_frequency > 0) {
+            doc_freq_cache[word_id] = doc_frequency;
+            idf_cache[word_id] = calculate_idf(word_id, doc_frequency);
+        }
     }
     
     for (uint32_t doc_internal_id : candidate_docs) {
@@ -118,9 +154,9 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query, int top
         
         std::string doc_id_str = it->second;
         
-        // Calculate BM25 score
-        double score = calculate_bm25(doc_internal_id, doc_id_str, 
-                                     query_word_ids, query_term_freq);
+        // ✅ OPTIMIZATION: Use optimized BM25 calculation with cached values
+        double score = calculate_bm25_optimized(doc_id_str, query_word_ids, 
+                                                query_term_freq, idf_cache);
         
         // Get document details
         const DocumentIndex* doc = forward_index->get_document(doc_id_str);
@@ -134,20 +170,32 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query, int top
         result.score = score;
         result.doc_internal_id = doc_internal_id;
         
-        // Store matched terms
-        for (uint32_t word_id : query_word_ids) {
-            uint32_t term_freq = forward_index->get_term_frequency(doc_id_str, word_id);
-            if (term_freq > 0) {
-                result.matched_terms[reverse_lexicon[word_id]] = term_freq;
+        // Store matched terms (optimized: get terms once)
+        const auto* doc_terms = forward_index->get_document_terms(doc_id_str);
+        if (doc_terms) {
+            // Build quick lookup map
+            std::unordered_map<uint32_t, uint32_t> term_freq_map;
+            for (const auto& term : *doc_terms) {
+                term_freq_map[term.word_id] = term.frequency;
+            }
+            
+            for (uint32_t word_id : query_word_ids) {
+                auto tf_it = term_freq_map.find(word_id);
+                if (tf_it != term_freq_map.end()) {
+                    result.matched_terms[reverse_lexicon[word_id]] = tf_it->second;
+                }
             }
         }
         
         results.push_back(result);
     }
-    clock_t end = clock();
-    std::cout<<"Searched in "<<end-start<<" ms\n";
-    // Step 5: Sort by score and return top K
-    std::cout << "\n[Step 5] Sorting and selecting top " << top_k << " results..." << std::endl;
+    
+    auto scoring_end = std::chrono::high_resolution_clock::now();
+    auto scoring_time = std::chrono::duration_cast<std::chrono::milliseconds>(scoring_end - scoring_start);
+    std::cout << "  [Scoring time: " << scoring_time.count() << " ms]" << std::endl;
+    
+    // Step 6: Sort by score and return top K
+    std::cout << "\n[Step 6] Sorting and selecting top " << top_k << " results..." << std::endl;
     std::sort(results.begin(), results.end(), 
               [](const SearchResult& a, const SearchResult& b) {
                   return a.score > b.score;
@@ -160,9 +208,78 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query, int top
     
     std::cout << "Returning " << results.size() << " results" << std::endl;
     
+    auto search_end = std::chrono::high_resolution_clock::now();
+    auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(search_end - search_start);
+    std::cout << "\n[*** TOTAL SEARCH TIME: " << total_time.count() << " ms ***]\n" << std::endl;
+    
     return results;
 }
 
+// ✅ NEW: Optimized BM25 calculation with pre-computed IDF values
+double SearchEngine::calculate_bm25_optimized(
+    const std::string& doc_id_str,
+    const std::vector<uint32_t>& query_word_ids,
+    const std::unordered_map<uint32_t, uint32_t>& query_term_freq,
+    const std::unordered_map<uint32_t, double>& idf_cache) {
+    
+    double score = 0.0;
+    
+    // Get document length
+    uint32_t doc_length = forward_index->get_document_length(doc_id_str);
+    
+    if (doc_length == 0) {
+        return 0.0;
+    }
+    
+    // Get document terms once
+    const auto* doc_terms = forward_index->get_document_terms(doc_id_str);
+    if (!doc_terms) {
+        return 0.0;
+    }
+    
+    // Build term frequency lookup map (O(n) once, then O(1) lookups)
+    std::unordered_map<uint32_t, uint32_t> term_freq_map;
+    for (const auto& term : *doc_terms) {
+        term_freq_map[term.word_id] = term.frequency;
+    }
+    
+    // Calculate BM25 for each query term
+    for (uint32_t word_id : query_word_ids) {
+        // Get term frequency in document (O(1) lookup)
+        auto tf_it = term_freq_map.find(word_id);
+        if (tf_it == term_freq_map.end()) {
+            continue; // Term not in this document
+        }
+        
+        uint32_t term_freq = tf_it->second;
+        
+        // Get pre-computed IDF (O(1) lookup)
+        auto idf_it = idf_cache.find(word_id);
+        if (idf_it == idf_cache.end()) {
+            continue;
+        }
+        
+        double idf = idf_it->second;
+        
+        // Calculate BM25 component for this term
+        double numerator = term_freq * (k1 + 1.0);
+        double denominator = term_freq + k1 * (1.0 - b + b * (doc_length / average_doc_length));
+        
+        double term_score = idf * (numerator / denominator);
+        
+        // Weight by query term frequency (if term appears multiple times in query)
+        auto qtf_it = query_term_freq.find(word_id);
+        if (qtf_it != query_term_freq.end() && qtf_it->second > 1) {
+            term_score *= qtf_it->second;
+        }
+        
+        score += term_score;
+    }
+    
+    return score;
+}
+
+// Keep the old calculate_bm25 for backward compatibility (if needed elsewhere)
 double SearchEngine::calculate_bm25(uint32_t doc_internal_id,
                                    const std::string& doc_id_str,
                                    const std::vector<uint32_t>& query_word_ids,

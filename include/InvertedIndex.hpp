@@ -6,7 +6,7 @@
 
 class InvertedIndex
 {
-    private:
+    public:
         // Original member
         std::unordered_map<uint32_t,std::vector<std::pair<uint32_t,uint32_t>>> inverted_index;
         

@@ -58,7 +58,6 @@ int MetadataParser::metadata_parse() {
         Paper paper;
         
         // Extract basic metadata
-        // Assuming CSV format: cord_uid, sha, source_x, title, doi, pmcid, pubmed_id, license, abstract, publish_time, authors, journal...
         paper.paper_id = clean_field(fields[0]);     // cord_uid
         std::string sha = clean_field(fields[1]);     // sha
         paper.title = clean_field(fields[3]);         // title
@@ -87,15 +86,9 @@ int MetadataParser::metadata_parse() {
             paper.body_text = full_text;
             full_text_count++;
         }
-
-        /*std::cout << "Parsed paper: " << paper.paper_id
-          << " | Title: " << paper.title << "\n";*/
-
         
         papers.push_back(paper);
         parsed_count++;
-        //std::cout << paper.body_text << std::endl;
-
         
         if (parsed_count % 1000 == 0) {
             std::cout << "Parsed " << parsed_count << " papers (with full text: " 
@@ -151,11 +144,19 @@ std::string MetadataParser::clean_field(const std::string& field) {
 std::string MetadataParser::find_fulltext_pdf(const std::string& sha) {
     if (sha.empty()) return "";
     
-    // CORD-19 structure: document_parses/pdf_json/{sha}.json
-    std::string json_path = data_path + "/comm_use_subset/pdf_json/" + sha + ".json";
+    // Search across all three folders
+    std::vector<std::string> folders = {
+        "/comm_use_subset/pdf_json/",
+        "/custom_license/pdf_json/",
+        "/noncomm_use_subset/pdf_json/"
+    };
     
-    if (fs::exists(json_path)) {
-        return extract_body_from_json(json_path);
+    for (const auto& folder : folders) {
+        std::string json_path = data_path + folder + sha + ".json";
+        
+        if (fs::exists(json_path)) {
+            return extract_body_from_json(json_path);
+        }
     }
     
     return "";
@@ -164,11 +165,19 @@ std::string MetadataParser::find_fulltext_pdf(const std::string& sha) {
 std::string MetadataParser::find_fulltext_xml(const std::string& pmcid) {
     if (pmcid.empty()) return "";
     
-    // CORD-19 structure: document_parses/pmc_json/{pmcid}.xml.json
-    std::string json_path = data_path + "/comm_use_subset/pmc_json/" + pmcid + ".xml.json";
+    // Search across all three folders
+    std::vector<std::string> folders = {
+        "/comm_use_subset/pmc_json/",
+        "/custom_license/pmc_json/",
+        "/noncomm_use_subset/pmc_json/"
+    };
     
-    if (fs::exists(json_path)) {
-        return extract_body_from_json(json_path);
+    for (const auto& folder : folders) {
+        std::string json_path = data_path + folder + pmcid + ".xml.json";
+        
+        if (fs::exists(json_path)) {
+            return extract_body_from_json(json_path);
+        }
     }
     
     return "";

@@ -7,6 +7,8 @@
 #include "../include/InvertedIndex.hpp"
 #include "../include/TextPreProcessor.hpp"
 #include "../include/AutoComplete.hpp"
+#include "../include/metadataparser.hpp"
+#include "../include/Lemmatizer.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -15,318 +17,106 @@
 #include <filesystem>
 #include <cstring>
 
-namespace fs = std::filesystem;
-
-// Global null output stream to redirect cout
-std::ofstream null_stream;
-std::streambuf* original_cout = nullptr;
-
-// Global objects
-LexiconBuilder* lexicon = nullptr;
-ForwardIndex* forward_index = nullptr;
-InvertedIndex* inverted_index = nullptr;
-TextPreprocessor* preprocessor = nullptr;
-CachedSearchEngine* bm25_engine = nullptr;
-WordEmbeddingsEngine* embeddings_engine = nullptr;
-SemanticSearchEngine* semantic_engine = nullptr;
-AutoComplete* autocomplete = nullptr;
-
-bool initialized = false;
-
-// Silence ALL stdout output
-void silence_stdout() {
-#ifdef _WIN32
-    null_stream.open("NUL");
-#else
-    null_stream.open("/dev/null");
-#endif
-    original_cout = std::cout.rdbuf();
-    std::cout.rdbuf(null_stream.rdbuf());
-}
-
-// Restore stdout for JSON output
-void restore_stdout() {
-    if (original_cout) {
-        std::cout.rdbuf(original_cout);
-    }
-}
-
-// Initialize all components
-bool initialize() {
-    if (initialized) return true;
+int main() {
+    auto start_time = std::chrono::high_resolution_clock::now();
     
-    // SILENCE EVERYTHING
-    silence_stdout();
+std::string data_path = "D:/THird Semester/DSA/dsaspp/DSAPROJECT/data/2020-04-10";   
+ std::string indices_path = "D:/THird Semester/DSA/dsaspp/DSAPROJECT/indices/";
     
-    std::string indices_path = "D:\\THird Semester\\DSA\\dsaspp\\DSAPROJECT\\indices\\";
-    std::string barrel_path = indices_path + "inverted_index_barrels";
-    std::string binary_embedding_file = 
-        "D:\\THird Semester\\DSA\\dsaspp\\DSAPROJECT\\embeddings\\glove.6B.100d.bin";
-    std::string autocomplete_cache = indices_path + "autocomplete.bin";
+    std::cout << "=== CORD-19 Lexicon Builder ===" << std::endl;
+    std::cout << "Data path: " << data_path << std::endl;
+    std::cout << "Output path: " << indices_path << std::endl << std::endl;
     
-    try {
-        // Load Lexicon
-        lexicon = new LexiconBuilder();
-        if (!lexicon->load_from_csv(indices_path + "lexicon.csv")) {
-            return false;
-        }
-        auto reverse_lex = lexicon->build_reverse_lexicon();
-        
-        // Load Forward Index
-        forward_index = new ForwardIndex();
-        if (!forward_index->load_from_binary(indices_path + "forward_index.bin")) {
-            return false;
-        }
-        
-        // Load Inverted Index
-        inverted_index = new InvertedIndex();
-        if (!inverted_index->load_from_binary(indices_path + "inverted_index.bin", reverse_lex)) {
-            return false;
-        }
-        
-        // Load Barrels
-        if (!inverted_index->load_barrel_metadata(barrel_path)) {
-            return false;
-        }
-        
-        // Initialize preprocessor
-        preprocessor = new TextPreprocessor();
-        
-        // Initialize BM25 Engine
-        bm25_engine = new CachedSearchEngine(lexicon, forward_index, inverted_index, preprocessor);
-        
-        // Load Word Embeddings
-        embeddings_engine = new WordEmbeddingsEngine();
-        if (fs::exists(binary_embedding_file)) {
-            embeddings_engine->load_embeddings_binary(binary_embedding_file);
-        }
-        
-        // Initialize Semantic Engine
-        semantic_engine = new SemanticSearchEngine(embeddings_engine, bm25_engine);
-        semantic_engine->set_weights(0.6f, 0.4f);
-        
-        // Load AutoComplete
-        autocomplete = new AutoComplete(10, false, 2);
-        if (fs::exists(autocomplete_cache)) {
-            autocomplete->load_from_binary(autocomplete_cache);
-        } else {
-            autocomplete->initialize_from_lexicon(lexicon);
-            autocomplete->save_to_binary(autocomplete_cache);
-        }
-        
-        initialized = true;
-        return true;
-        
-    } catch (...) {
-        return false;
-    }
-}
-
-// Escape string for JSON
-std::string escape_json(const std::string& input) {
-    std::ostringstream ss;
-    for (char c : input) {
-        switch (c) {
-            case '"':  ss << "\\\""; break;
-            case '\\': ss << "\\\\"; break;
-            case '\n': ss << "\\n"; break;
-            case '\r': ss << "\\r"; break;
-            case '\t': ss << "\\t"; break;
-            case '\b': ss << "\\b"; break;
-            case '\f': ss << "\\f"; break;
-            default:
-                if (c < 32) {
-                    ss << "\\u" << std::hex << std::setw(4) << std::setfill('0') << (int)c;
-                } else {
-                    ss << c;
-                }
-                break;
-        }
-    }
-    return ss.str();
-}
-
-// Output BM25 result as JSON
-void output_bm25_result(const SearchResult& result, bool is_last) {
-    std::cout << "    {\n";
-    std::cout << "      \"doc_id\": \"" << escape_json(result.doc_id) << "\",\n";
-    std::cout << "      \"title\": \"" << escape_json(result.title) << "\",\n";
-    std::cout << "      \"abstract\": \"" << escape_json(result.abstract) << "\",\n";
-    std::cout << "      \"score\": " << result.score << ",\n";
-    std::cout << "      \"matched_terms\": {";
+    // Step 1: Parse metadata
+    std::cout << "Step 1: Parsing metadata..." << std::endl;
+    MetadataParser parser(data_path);
     
-    int count = 0;
-    for (const auto& [term, freq] : result.matched_terms) {
-        if (count > 0) std::cout << ", ";
-        std::cout << "\"" << escape_json(term) << "\": " << freq;
-        count++;
-    }
+    int total_papers = parser.metadata_stats();
+    std::cout << "Found " << total_papers << " papers in metadata" << std::endl;
     
-    std::cout << "}\n";
-    std::cout << "    }";
-    if (!is_last) std::cout << ",";
-    std::cout << "\n";
-}
-
-// Output semantic result as JSON
-void output_semantic_result(const SemanticSearchResult& result, bool is_last) {
-    std::cout << "    {\n";
-    std::cout << "      \"doc_id\": \"" << escape_json(result.doc_id) << "\",\n";
-    std::cout << "      \"title\": \"" << escape_json(result.title) << "\",\n";
-    std::cout << "      \"abstract\": \"" << escape_json(result.abstract) << "\",\n";
-    std::cout << "      \"semantic_score\": " << result.semantic_score << ",\n";
-    std::cout << "      \"bm25_score\": " << result.bm25_score << ",\n";
-    std::cout << "      \"combined_score\": " << result.combined_score << ",\n";
-    std::cout << "      \"matched_terms\": {";
+    int parsed = parser.metadata_parse();
+    std::cout << "Successfully parsed " << parsed << " papers" << std::endl << std::endl;
     
-    if (!result.matched_terms.empty()) {
-        int count = 0;
-        for (const auto& term : result.matched_terms) {
-            if (count > 0) std::cout << ", ";
-            std::cout << "\"" << escape_json(term) << "\": 1";
-            count++;
+    // Step 2: Initialize lemmatizer and lexicon builder
+    std::cout << "Step 2: Initializing lemmatizer and lexicon builder..." << std::endl;
+    Lemmatizer lemmatizer;
+    LexiconBuilder lexicon;
+    std::cout << std::endl;
+    
+    // Step 3: Process papers and build lexicon
+    std::cout << "Step 3: Processing papers and building lexicon..." << std::endl;
+    
+    const auto& papers = parser.getPapers();
+    int papers_processed = 0;
+    int papers_with_text = 0;
+    
+    for (const auto& paper : papers) {
+        // Combine abstract and body text
+        std::string full_text = paper.abstract_text;
+        
+        if (!paper.body_text.empty()) {
+            full_text += " " + paper.body_text;
+            papers_with_text++;
+        }
+        
+        if (full_text.empty()) {
+            continue;
+        }
+        
+        // Get term frequencies from lemmatizer
+        std::unordered_map<std::string, u32> term_freqs;
+        lemmatizer.process_text(full_text, term_freqs);
+        
+        // Add terms to lexicon
+        for (const auto& [term, freq] : term_freqs) {
+            lexicon.add_word(term, freq);
+        }
+        
+        papers_processed++;
+        
+        // Progress update every 1000 papers
+        if (papers_processed % 1000 == 0) {
+            std::cout << "Processed " << papers_processed << " papers, "
+                      << "Lexicon size: " << lexicon.get_size() << " unique terms" << std::endl;
         }
     }
     
-    std::cout << "}\n";
-    std::cout << "    }";
-    if (!is_last) std::cout << ",";
-    std::cout << "\n";
-}
-
-// Handle search
-void handle_search(const std::string& query, const std::string& mode, int top_k) {
-    if (!initialize()) {
-        restore_stdout();
-        std::cout << "{\"error\": \"Initialization failed\"}" << std::endl;
-        return;
+    std::cout << "\nProcessing complete!" << std::endl;
+    std::cout << "Total papers processed: " << papers_processed << std::endl;
+    std::cout << "Papers with full text: " << papers_with_text << std::endl;
+    std::cout << "Final lexicon size: " << lexicon.get_size() << " unique terms" << std::endl << std::endl;
+    
+    // Step 4: Save lexicon to CSV
+    std::cout << "Step 4: Saving lexicon to CSV..." << std::endl;
+    std::string lexicon_path = indices_path + "lexicon.csv";
+    lexicon.save_to_csv(lexicon_path);
+    std::cout << "✓ Lexicon saved to: " << lexicon_path << std::endl << std::endl;
+    
+    // Step 5: Show statistics
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+    
+    std::cout << "=== Statistics ===" << std::endl;
+    std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
+    std::cout << "Papers processed: " << papers_processed << std::endl;
+    std::cout << "Unique terms in lexicon: " << lexicon.get_size() << std::endl;
+    
+    // Show top 10 most frequent terms
+    auto lexicon_data = lexicon.get_lexicon_data();
+    std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>> sorted_terms(
+        lexicon_data.begin(), lexicon_data.end()
+    );
+    
+    std::sort(sorted_terms.begin(), sorted_terms.end(),
+              [](const auto& a, const auto& b) { return a.second.second > b.second.second; });
+    
+    std::cout << "\nTop 10 most frequent terms:" << std::endl;
+    for (int i = 0; i < 10 && i < sorted_terms.size(); i++) {
+        std::cout << (i+1) << ". " << sorted_terms[i].first 
+                  << " (freq: " << sorted_terms[i].second.second << ")" << std::endl;
     }
     
-    // Keep stdout silenced during preprocessing
-    auto query_tokens = preprocessor->preprocess(query);
-    
-    // Restore for JSON output
-    restore_stdout();
-    
-    std::cout << "{\n";
-    std::cout << "  \"query\": \"" << escape_json(query) << "\",\n";
-    std::cout << "  \"mode\": \"" << mode << "\",\n";
-    std::cout << "  \"results\": [\n";
-    
-    // Silence again for search
-    silence_stdout();
-    
-    if (mode == "bm25") {
-        auto results = bm25_engine->search(query, top_k);
-        restore_stdout();
-        
-        for (size_t i = 0; i < results.size(); i++) {
-            output_bm25_result(results[i], i == results.size() - 1);
-        }
-        std::cout << "  ],\n";
-        std::cout << "  \"total_results\": " << results.size() << "\n";
-        
-    } else if (mode == "semantic") {
-        auto results = semantic_engine->semantic_search(query, query_tokens, forward_index, top_k);
-        restore_stdout();
-        
-        for (size_t i = 0; i < results.size(); i++) {
-            output_semantic_result(results[i], i == results.size() - 1);
-        }
-        std::cout << "  ],\n";
-        std::cout << "  \"total_results\": " << results.size() << "\n";
-        
-    } else if (mode == "hybrid") {
-        auto results = semantic_engine->hybrid_search(query, query_tokens, forward_index, top_k);
-        restore_stdout();
-        
-        for (size_t i = 0; i < results.size(); i++) {
-            output_semantic_result(results[i], i == results.size() - 1);
-        }
-        std::cout << "  ],\n";
-        std::cout << "  \"total_results\": " << results.size() << "\n";
-    }
-    
-    std::cout << "}" << std::endl;
-}
-
-// Handle autocomplete
-void handle_autocomplete(const std::string& prefix, int limit) {
-    if (!initialize()) {
-        restore_stdout();
-        std::cout << "{\"suggestions\": []}" << std::endl;
-        return;
-    }
-    
-    auto suggestions = autocomplete->get_suggestions(prefix, limit);
-    restore_stdout();
-    
-    std::cout << "{\n";
-    std::cout << "  \"prefix\": \"" << escape_json(prefix) << "\",\n";
-    std::cout << "  \"suggestions\": [\n";
-    
-    for (size_t i = 0; i < suggestions.size(); i++) {
-        std::cout << "    {\n";
-        std::cout << "      \"word\": \"" << escape_json(suggestions[i].word) << "\",\n";
-        std::cout << "      \"frequency\": " << suggestions[i].frequency << "\n";
-        std::cout << "    }";
-        if (i < suggestions.size() - 1) std::cout << ",";
-        std::cout << "\n";
-    }
-    
-    std::cout << "  ]\n";
-    std::cout << "}" << std::endl;
-}
-
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage:" << std::endl;
-        std::cerr << "  --search <query> --mode <bm25|semantic|hybrid> --topk <N>" << std::endl;
-        std::cerr << "  --autocomplete <prefix> --limit <N>" << std::endl;
-        return 1;
-    }
-    
-    std::string command = argv[1];
-    
-    if (command == "--search") {
-        if (argc < 3) {
-            std::cout << "{\"error\": \"Missing query\"}" << std::endl;
-            return 1;
-        }
-        
-        std::string query = argv[2];
-        std::string mode = "hybrid";
-        int top_k = 10;
-        
-        for (int i = 3; i < argc - 1; i++) {
-            if (std::strcmp(argv[i], "--mode") == 0) {
-                mode = argv[i + 1];
-            } else if (std::strcmp(argv[i], "--topk") == 0) {
-                top_k = std::stoi(argv[i + 1]);
-            }
-        }
-        
-        handle_search(query, mode, top_k);
-        
-    } else if (command == "--autocomplete") {
-        if (argc < 3) {
-            std::cout << "{\"suggestions\": []}" << std::endl;
-            return 1;
-        }
-        
-        std::string prefix = argv[2];
-        int limit = 10;
-        
-        if (argc >= 5 && std::strcmp(argv[3], "--limit") == 0) {
-            limit = std::stoi(argv[4]);
-        }
-        
-        handle_autocomplete(prefix, limit);
-        
-    } else {
-        std::cout << "{\"error\": \"Unknown command\"}" << std::endl;
-        return 1;
-    }
+    std::cout << "\n✓ Lexicon building complete!" << std::endl;
     
     return 0;
 }
