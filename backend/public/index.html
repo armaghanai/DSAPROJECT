@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COVID-19 Research Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            animation: fadeIn 0.6s ease-in;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .search-container {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            border: 3px solid #667eea;
+            border-radius: 50px;
+            padding: 5px;
+            transition: all 0.3s;
+        }
+
+        .search-input-wrapper:focus-within {
+            border-color: #764ba2;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-icon {
+            padding: 0 15px;
+            color: #667eea;
+        }
+
+        #searchInput {
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 15px 10px;
+            font-size: 16px;
+            background: transparent;
+        }
+
+        .search-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .search-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .search-btn:active {
+            transform: scale(0.95);
+        }
+
+        .search-modes {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .mode-btn {
+            padding: 10px 20px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .mode-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-top: 5px;
+            z-index: 1000;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .suggestion-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .suggestion-item:hover {
+            background: #f8f9ff;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f8f9ff 0%, #e8ebff 100%);
+            padding: 15px 25px;
+            border-radius: 12px;
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .results-container {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            animation: slideUp 0.3s ease-out;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .result-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        .result-card.expanded {
+            cursor: default;
+        }
+
+        .result-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .result-score {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            margin-bottom: 10px;
+        }
+
+        .result-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            color: #666;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .result-abstract {
+            color: #555;
+            line-height: 1.6;
+            margin-top: 10px;
+        }
+
+        .matched-terms {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .term-badge {
+            background: #e8ebff;
+            color: #667eea;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+        }
+
+        .view-json-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        .view-json-btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+
+        .json-viewer {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .json-viewer.visible {
+            display: block;
+        }
+
+        .json-viewer pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .close-json-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+
+        .close-json-btn:hover {
+            background: #da190b;
+        }
+
+        .loader {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 50px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 50px;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .timing-info {
+            text-align: center;
+            color: white;
+            margin-top: 15px;
+            font-size: 1.1em;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .search-container {
+                padding: 20px;
+            }
+
+            .search-modes {
+                flex-direction: column;
+            }
+
+            .mode-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 COVID-19 Research Search Engine</h1>
+            <p>Powered by BM25 + Semantic Search with Word Embeddings</p>
+        </div>
+
+        <div class="search-container">
+            <div class="search-box">
+                <div class="search-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Search research papers (e.g., viral transmission, vaccine efficacy)..."
+                        autocomplete="off"
+                    >
+                    <button class="search-btn" onclick="performSearch()">
+                        <span>Search</span>
+                    </button>
+                </div>
+                <div id="suggestions" class="suggestions" style="display: none;"></div>
+            </div>
+
+            <div class="search-modes">
+                <button class="mode-btn" data-mode="bm25" onclick="setSearchMode('bm25')">
+                    📊 BM25 Keyword
+                </button>
+                <button class="mode-btn" data-mode="semantic" onclick="setSearchMode('semantic')">
+                    🧠 Semantic
+                </button>
+                <button class="mode-btn active" data-mode="hybrid" onclick="setSearchMode('hybrid')">
+                    ⚡ Hybrid (Best)
+                </button>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalDocs">-</div>
+                    <div class="stat-label">Documents</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="vocabSize">-</div>
+                    <div class="stat-label">Vocabulary</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="searchTime">0 ms</div>
+                    <div class="stat-label">Last Search</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultsContainer"></div>
+        <div id="timingInfo" class="timing-info"></div>
+    </div>
+
+    <script>
+        let currentMode = 'hybrid';
+        let autoCompleteTimeout = null;
+        let currentResults = [];
+
+        // Initialize
+        fetch('http://localhost:3000/api/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('totalDocs').textContent = data.totalDocs.toLocaleString();
+                document.getElementById('vocabSize').textContent = data.vocabSize.toLocaleString();
+            })
+            .catch(err => console.error('Stats error:', err));
+
+        // Search input handler
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value;
+            
+            if (query.length >= 2) {
+                clearTimeout(autoCompleteTimeout);
+                autoCompleteTimeout = setTimeout(() => {
+                    fetchSuggestions(query);
+                }, 300);
+            } else {
+                document.getElementById('suggestions').style.display = 'none';
+            }
+        });
+
+        // Enter key to search
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        function setSearchMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+        }
+
+        function fetchSuggestions(query) {
+            const lastWord = query.split(' ').pop();
+            
+            fetch(`http://localhost:3000/api/autocomplete?prefix=${encodeURIComponent(lastWord)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        displaySuggestions(data.suggestions, query);
+                    } else {
+                        document.getElementById('suggestions').style.display = 'none';
+                    }
+                })
+                .catch(err => console.error('Autocomplete error:', err));
+        }
+
+        function displaySuggestions(suggestions, originalQuery) {
+            const suggestionsDiv = document.getElementById('suggestions');
+            const words = originalQuery.split(' ');
+            const prefix = words.slice(0, -1).join(' ');
+            
+            suggestionsDiv.innerHTML = suggestions.map(sugg => 
+                `<div class="suggestion-item" onclick="selectSuggestion('${prefix ? prefix + ' ' : ''}${sugg.word}')">
+                    ${sugg.word} <span style="color: #999; font-size: 0.85em;">(${sugg.frequency})</span>
+                </div>`
+            ).join('');
+            
+            suggestionsDiv.style.display = 'block';
+        }
+
+        function selectSuggestion(text) {
+            document.getElementById('searchInput').value = text;
+            document.getElementById('suggestions').style.display = 'none';
+            performSearch();
+        }
+
+        function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            
+            if (!query) {
+                alert('Please enter a search query');
+                return;
+            }
+
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+            
+            const startTime = Date.now();
+
+            fetch('http://localhost:3000/api/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, mode: currentMode, top_k: 20 })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const searchTime = Date.now() - startTime;
+                document.getElementById('searchTime').textContent = `${searchTime} ms`;
+                
+                currentResults = data.results;
+                displayResults(data.results, searchTime);
+            })
+            .catch(err => {
+                console.error('Search error:', err);
+                resultsContainer.innerHTML = `
+                    <div class="no-results">
+                        ❌ Search failed. Please make sure the backend server is running.
+                    </div>
+                `;
+            });
+
+            document.getElementById('suggestions').style.display = 'none';
+        }
+
+        function displayResults(results, searchTime) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            if (!results || results.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="no-results">
+                        No results found. Try different keywords or search mode.
+                    </div>
+                `;
+                return;
+            }
+
+            const timingClass = searchTime <= 500 ? '✅ EXCELLENT' : 
+                              searchTime <= 1500 ? '✓ GOOD' : '⚠️ SLOW';
+
+            document.getElementById('timingInfo').innerHTML = `
+                Found ${results.length} results in ${searchTime}ms ${timingClass}
+            `;
+
+            resultsContainer.innerHTML = `
+                <div class="results-container">
+                    ${results.map((result, index) => `
+                        <div class="result-card" id="result-${index}" style="animation-delay: ${index * 0.05}s">
+                            <div class="result-score">
+                                ${result.combined_score !== undefined ? 
+                                  `Combined: ${result.combined_score.toFixed(4)}` : 
+                                  `Score: ${result.score.toFixed(4)}`}
+                            </div>
+                            <div class="result-title">${result.title || 'Untitled'}</div>
+                            <div class="result-meta">
+                                <div class="meta-item">📄 ${result.doc_id}</div>
+                                ${result.bm25_score !== undefined ? 
+                                  `<div class="meta-item">📊 BM25: ${result.bm25_score.toFixed(3)}</div>` : ''}
+                                ${result.semantic_score !== undefined ? 
+                                  `<div class="meta-item">🧠 Semantic: ${result.semantic_score.toFixed(3)}</div>` : ''}
+                            </div>
+                            ${result.matched_terms && Object.keys(result.matched_terms).length > 0 ? `
+                                <div class="matched-terms">
+                                    ${Object.entries(result.matched_terms).map(([term, freq]) => 
+                                        `<span class="term-badge">${term} (${freq})</span>`
+                                    ).join('')}
+                                </div>
+                            ` : ''}
+                            <div class="result-abstract">
+                                ${result.abstract ? 
+                                  (result.abstract.length > 300 ? 
+                                    result.abstract.substring(0, 300) + '...' : 
+                                    result.abstract) : 
+                                  'No abstract available'}
+                            </div>
+                            <button class="view-json-btn" onclick="toggleJSON(${index})">
+                                📋 View Full JSON
+                            </button>
+                            <div id="json-${index}" class="json-viewer">
+                                <pre>${JSON.stringify(result, null, 2)}</pre>
+                                <button class="close-json-btn" onclick="toggleJSON(${index})">
+                                    ✕ Close
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function toggleJSON(index) {
+            const jsonDiv = document.getElementById(`json-${index}`);
+            const card = document.getElementById(`result-${index}`);
+            
+            if (jsonDiv.classList.contains('visible')) {
+                jsonDiv.classList.remove('visible');
+                card.classList.remove('expanded');
+            } else {
+                // Close all other JSON viewers
+                document.querySelectorAll('.json-viewer').forEach(div => {
+                    div.classList.remove('visible');
+                });
+                document.querySelectorAll('.result-card').forEach(c => {
+                    c.classList.remove('expanded');
+                });
+                
+                // Open this one
+                jsonDiv.classList.add('visible');
+                card.classList.add('expanded');
+                
+                // Scroll to the card
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        // Click outside to close suggestions
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-box')) {
+                document.getElementById('suggestions').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

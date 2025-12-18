@@ -2,6 +2,6 @@ data/
 build/
 indices/
 embeddings/
-backend/node_modules/
+node_modules/
 
 .vscode/
