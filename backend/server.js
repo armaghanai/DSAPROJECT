@@ -1,4 +1,3 @@
-// server.js - Fixed version with PERSISTENT C++ process
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
@@ -15,13 +14,11 @@ app.use(express.static('public'));
 // Path to C++ executable
 const CPP_EXECUTABLE = path.join(__dirname, '..', 'build', 'main.exe');
 
-// ✅ PERSISTENT C++ process (initialized ONCE)
 let cppProcess = null;
 let requestQueue = [];
 let currentRequestId = 0;
 let pendingRequests = new Map();
 
-// ✅ Initialize persistent C++ process
 function initializeCppProcess() {
     console.log('🚀 Starting persistent C++ search engine process...');
     
@@ -31,7 +28,6 @@ function initializeCppProcess() {
     
     let buffer = '';
     
-    // ✅ Handle C++ stdout (JSON responses)
     cppProcess.stdout.on('data', (data) => {
         buffer += data.toString();
         
@@ -42,7 +38,6 @@ function initializeCppProcess() {
         for (let line of lines) {
             if (!line.trim()) continue;
             
-            // ✅ Skip non-JSON lines (progress messages, debug output)
             if (!line.trim().startsWith('{')) {
                 console.log('[C++ Output]', line);
                 continue;
@@ -73,7 +68,6 @@ function initializeCppProcess() {
         }
     });
     
-    // Handle C++ stderr (debug/error messages)
     cppProcess.stderr.on('data', (data) => {
         // Print C++ debug output (progress, logs, etc.)
         const lines = data.toString().split('\n');
@@ -105,7 +99,6 @@ function initializeCppProcess() {
     });
 }
 
-// ✅ Send request to persistent C++ process
 function sendCppRequest(requestData) {
     return new Promise((resolve, reject) => {
         if (!cppProcess) {
@@ -113,7 +106,6 @@ function sendCppRequest(requestData) {
             return;
         }
         
-        // Add request ID for tracking
         const requestId = currentRequestId++;
         requestData.request_id = requestId;
         
@@ -124,7 +116,6 @@ function sendCppRequest(requestData) {
         const jsonLine = JSON.stringify(requestData) + '\n';
         cppProcess.stdin.write(jsonLine);
         
-        // Timeout after 30 seconds
         setTimeout(() => {
             if (pendingRequests.has(requestId)) {
                 pendingRequests.delete(requestId);
@@ -134,7 +125,6 @@ function sendCppRequest(requestData) {
     });
 }
 
-// Cache for stats
 let cachedStats = {
     totalDocs: 45000,
     vocabSize: 125000,
@@ -143,12 +133,10 @@ let cachedStats = {
 
 // API Routes
 
-// GET /api/stats - Get corpus statistics
 app.get('/api/stats', (req, res) => {
     res.json(cachedStats);
 });
 
-// POST /api/search - Perform search (using PERSISTENT C++ process)
 app.post('/api/search', async (req, res) => {
     try {
         const { query, mode = 'hybrid', top_k = 10 } = req.body;
@@ -161,7 +149,6 @@ app.post('/api/search', async (req, res) => {
         
         const startTime = Date.now();
         
-        // ✅ Send to persistent C++ process (FAST - no reinitialization!)
         const response = await sendCppRequest({
             type: 'search',
             query: query,
@@ -190,7 +177,6 @@ app.post('/api/search', async (req, res) => {
     }
 });
 
-// GET /api/autocomplete - Get autocomplete suggestions
 app.get('/api/autocomplete', async (req, res) => {
     try {
         const { prefix, limit = 10 } = req.query;

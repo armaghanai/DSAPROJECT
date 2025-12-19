@@ -18,7 +18,7 @@ struct SearchState {
     ForwardIndex forward_index;
     InvertedIndex inverted_index;
     TextPreprocessor preprocessor;
-    Lemmatizer lemmatizer;  // ✅ Full lemmatizer - initialized ONCE
+    Lemmatizer lemmatizer;  
     CachedSearchEngine* search_engine = nullptr;
     AutoComplete* autocomplete = nullptr;
     bool initialized = false;
@@ -66,7 +66,7 @@ bool initialize_search_engine(const std::string& indices_path) {
         &g_state.forward_index,
         &g_state.inverted_index,
         &g_state.preprocessor,
-        &g_state.lemmatizer  // ✅ Pass shared lemmatizer
+        &g_state.lemmatizer
     );
     
     // Initialize autocomplete
@@ -101,7 +101,7 @@ void handle_search(const std::string& query, const std::string& mode, int top_k,
     
     // Build JSON response
     json response;
-    response["request_id"] = request_id;  // ✅ Include request_id for tracking
+    response["request_id"] = request_id;  
     response["query"] = query;
     response["mode"] = mode;
     response["search_time_ms"] = duration.count();
@@ -157,19 +157,16 @@ int main() {
 
     std::string indices_path = "D:\\THird Semester\\DSA\\dsaspp\\DSAPROJECT\\indices\\";
 
-    // ✅ Initialize ONCE (takes a few seconds)
     std::cerr << "[C++ Init] Starting initialization..." << std::endl;
     if (!initialize_search_engine(indices_path)) {
         std::cerr << "Failed to initialize search engine" << std::endl;
         return 1;
     }
 
-    // ✅ Signal that we're ready to accept requests
     std::cout << R"({"status":"ready"})" << std::endl;
     std::cout.flush();
     std::cerr << "[C++ Init] Ready to accept requests via stdin" << std::endl;
 
-    // 🔁 Persistent request loop (processes multiple queries WITHOUT reinitializing!)
     std::string line;
     while (std::getline(std::cin, line)) {
         if (line.empty()) continue;
