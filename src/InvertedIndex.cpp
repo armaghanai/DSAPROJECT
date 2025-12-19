@@ -209,6 +209,9 @@ void InvertedIndex::clear()
 
 // ========== BARREL METHODS ==========
 
+
+
+
 bool InvertedIndex::create_barrels(
     const std::string& barrel_dir,
     const std::unordered_map<uint32_t, std::string>& reverse_lex,
@@ -427,7 +430,7 @@ bool InvertedIndex::load_barrel_by_index(
         return false;
     }
     
-    inverted_index.clear();
+    // inverted_index.clear();
     
     uint32_t barrel_id, start_id, end_id;
     in.read(reinterpret_cast<char*>(&barrel_id), sizeof(barrel_id));

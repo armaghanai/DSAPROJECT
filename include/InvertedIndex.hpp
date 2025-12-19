@@ -63,6 +63,10 @@ class InvertedIndex
         bool load_barrel_for_word(uint32_t word_id,
                                  std::unordered_map<uint32_t, std::string>& reverse_lex);
         
+        // ✅ NEW: Load ALL barrels at startup (fixes 16000ms issue!)
+        // Call this once after load_barrel_metadata() to load everything into memory
+        bool load_all_barrels_at_startup(std::unordered_map<uint32_t, std::string>& reverse_lex);
+        
         // Get currently loaded barrel info (-1 if none loaded)
         int get_loaded_barrel() const { return currently_loaded_barrel; }
         

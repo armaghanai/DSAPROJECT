@@ -1,4 +1,4 @@
-// server.js - Node.js backend for C++ search engine
+// server.js - Fixed version with PERSISTENT C++ process
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
@@ -10,103 +10,136 @@ const PORT = 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // Serve HTML frontend
+app.use(express.static('public'));
 
-// Path to your compiled C++ executable
-// Updated to point to build/main.exe (CMake output)
-const CPP_EXECUTABLE = path.join(__dirname, '..', 'build', 'main.exe'); // For Windows with CMake
-// For Linux/Mac: path.join(__dirname, '..', 'build', 'main')
+// Path to C++ executable
+const CPP_EXECUTABLE = path.join(__dirname, '..', 'build', 'main.exe');
 
-// Cache for stats (loaded once)
+// ✅ PERSISTENT C++ process (initialized ONCE)
+let cppProcess = null;
+let requestQueue = [];
+let currentRequestId = 0;
+let pendingRequests = new Map();
+
+// ✅ Initialize persistent C++ process
+function initializeCppProcess() {
+    console.log('🚀 Starting persistent C++ search engine process...');
+    
+    cppProcess = spawn(CPP_EXECUTABLE, [], {
+        stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    let buffer = '';
+    
+    // ✅ Handle C++ stdout (JSON responses)
+    cppProcess.stdout.on('data', (data) => {
+        buffer += data.toString();
+        
+        // Process complete JSON lines
+        let lines = buffer.split('\n');
+        buffer = lines.pop(); // Keep incomplete line in buffer
+        
+        for (let line of lines) {
+            if (!line.trim()) continue;
+            
+            // ✅ Skip non-JSON lines (progress messages, debug output)
+            if (!line.trim().startsWith('{')) {
+                console.log('[C++ Output]', line);
+                continue;
+            }
+            
+            try {
+                const response = JSON.parse(line);
+                
+                // Check if this is the ready signal
+                if (response.status === 'ready') {
+                    console.log('✓ C++ search engine is READY!');
+                    console.log('  Initialization complete - accepting queries\n');
+                    return;
+                }
+                
+                // Find and resolve the pending request
+                const requestId = response.request_id || 0;
+                const resolver = pendingRequests.get(requestId);
+                
+                if (resolver) {
+                    resolver.resolve(response);
+                    pendingRequests.delete(requestId);
+                }
+            } catch (err) {
+                // Not JSON - probably debug output, just log it
+                console.log('[C++]', line);
+            }
+        }
+    });
+    
+    // Handle C++ stderr (debug/error messages)
+    cppProcess.stderr.on('data', (data) => {
+        // Print C++ debug output (progress, logs, etc.)
+        const lines = data.toString().split('\n');
+        for (const line of lines) {
+            if (line.trim()) {
+                console.log('[C++]', line);
+            }
+        }
+    });
+    
+    // Handle process exit
+    cppProcess.on('close', (code) => {
+        console.error(`❌ C++ process exited with code ${code}`);
+        cppProcess = null;
+        
+        // Reject all pending requests
+        for (let [id, resolver] of pendingRequests) {
+            resolver.reject(new Error('C++ process crashed'));
+        }
+        pendingRequests.clear();
+        
+        // Auto-restart after 1 second
+        console.log('Restarting C++ process in 1 second...');
+        setTimeout(initializeCppProcess, 1000);
+    });
+    
+    cppProcess.on('error', (err) => {
+        console.error('Failed to start C++ process:', err);
+    });
+}
+
+// ✅ Send request to persistent C++ process
+function sendCppRequest(requestData) {
+    return new Promise((resolve, reject) => {
+        if (!cppProcess) {
+            reject(new Error('C++ process not running'));
+            return;
+        }
+        
+        // Add request ID for tracking
+        const requestId = currentRequestId++;
+        requestData.request_id = requestId;
+        
+        // Store resolver
+        pendingRequests.set(requestId, { resolve, reject });
+        
+        // Send JSON request to C++ stdin
+        const jsonLine = JSON.stringify(requestData) + '\n';
+        cppProcess.stdin.write(jsonLine);
+        
+        // Timeout after 30 seconds
+        setTimeout(() => {
+            if (pendingRequests.has(requestId)) {
+                pendingRequests.delete(requestId);
+                reject(new Error('Request timeout'));
+            }
+        }, 30000);
+    });
+}
+
+// Cache for stats
 let cachedStats = {
-    totalDocs: 0,
-    vocabSize: 0,
-    avgDocLength: 0
+    totalDocs: 45000,
+    vocabSize: 125000,
+    avgDocLength: 250
 };
-
-// Initialize stats on startup
-function initializeStats() {
-    // You can run your C++ program with a special flag to get stats
-    // For now, using placeholder values
-    cachedStats = {
-        totalDocs: 45000,
-        vocabSize: 125000,
-        avgDocLength: 250
-    };
-    console.log('Stats initialized:', cachedStats);
-}
-
-// Call C++ search engine
-function callCppSearch(query, mode, topK) {
-    return new Promise((resolve, reject) => {
-        // Arguments to pass to C++ program
-        const args = ['--search', query, '--mode', mode, '--topk', topK.toString()];
-        
-        const cpp = spawn(CPP_EXECUTABLE, args);
-        
-        let stdout = '';
-        let stderr = '';
-        
-        cpp.stdout.on('data', (data) => {
-            stdout += data.toString();
-        });
-        
-        cpp.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
-        
-        cpp.on('close', (code) => {
-            if (code !== 0) {
-                console.error('C++ Error:', stderr);
-                reject(new Error('Search engine failed'));
-                return;
-            }
-            
-            try {
-                // Parse JSON output from C++
-                const results = JSON.parse(stdout);
-                resolve(results);
-            } catch (err) {
-                console.error('Parse error:', err);
-                reject(new Error('Failed to parse results'));
-            }
-        });
-        
-        cpp.on('error', (err) => {
-            console.error('Spawn error:', err);
-            reject(err);
-        });
-    });
-}
-
-// Call C++ autocomplete
-function callCppAutocomplete(prefix, limit = 10) {
-    return new Promise((resolve, reject) => {
-        const args = ['--autocomplete', prefix, '--limit', limit.toString()];
-        
-        const cpp = spawn(CPP_EXECUTABLE, args);
-        
-        let stdout = '';
-        
-        cpp.stdout.on('data', (data) => {
-            stdout += data.toString();
-        });
-        
-        cpp.on('close', (code) => {
-            if (code !== 0) {
-                resolve({ suggestions: [] });
-                return;
-            }
-            
-            try {
-                const results = JSON.parse(stdout);
-                resolve(results);
-            } catch (err) {
-                resolve({ suggestions: [] });
-            }
-        });
-    });
-}
 
 // API Routes
 
@@ -115,7 +148,7 @@ app.get('/api/stats', (req, res) => {
     res.json(cachedStats);
 });
 
-// POST /api/search - Perform search
+// POST /api/search - Perform search (using PERSISTENT C++ process)
 app.post('/api/search', async (req, res) => {
     try {
         const { query, mode = 'hybrid', top_k = 10 } = req.body;
@@ -124,22 +157,32 @@ app.post('/api/search', async (req, res) => {
             return res.status(400).json({ error: 'Query is required' });
         }
         
-        console.log(`Search request: "${query}" (${mode})`);
+        console.log(`🔍 Search request: "${query}" (${mode}, top_k=${top_k})`);
         
         const startTime = Date.now();
-        const results = await callCppSearch(query, mode, top_k);
+        
+        // ✅ Send to persistent C++ process (FAST - no reinitialization!)
+        const response = await sendCppRequest({
+            type: 'search',
+            query: query,
+            mode: mode,
+            top_k: top_k
+        });
+        
         const searchTime = Date.now() - startTime;
         
+        console.log(`  ✓ Completed in ${searchTime}ms (found ${response.results?.length || 0} results)`);
+        
         res.json({
-            query,
-            mode,
-            results: results.results || [],
+            query: response.query,
+            mode: response.mode,
+            results: response.results || [],
             search_time_ms: searchTime,
-            total_results: results.total_results || 0
+            total_results: response.total_results || 0
         });
         
     } catch (error) {
-        console.error('Search error:', error);
+        console.error('❌ Search error:', error);
         res.status(500).json({ 
             error: 'Search failed', 
             message: error.message 
@@ -156,8 +199,13 @@ app.get('/api/autocomplete', async (req, res) => {
             return res.json({ suggestions: [] });
         }
         
-        const results = await callCppAutocomplete(prefix, parseInt(limit));
-        res.json(results);
+        const response = await sendCppRequest({
+            type: 'autocomplete',
+            prefix: prefix,
+            limit: parseInt(limit)
+        });
+        
+        res.json(response);
         
     } catch (error) {
         console.error('Autocomplete error:', error);
@@ -167,7 +215,28 @@ app.get('/api/autocomplete', async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ 
+        status: cppProcess ? 'ok' : 'error',
+        cpp_process_running: cppProcess !== null,
+        timestamp: new Date().toISOString() 
+    });
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('\n🛑 Shutting down...');
+    
+    if (cppProcess) {
+        // Send exit command to C++ process
+        sendCppRequest({ type: 'exit' }).catch(() => {});
+        
+        setTimeout(() => {
+            cppProcess.kill();
+            process.exit(0);
+        }, 1000);
+    } else {
+        process.exit(0);
+    }
 });
 
 // Start server
@@ -179,8 +248,10 @@ app.listen(PORT, () => {
     console.log(`  GET  /api/stats          - Corpus statistics`);
     console.log(`  POST /api/search         - Perform search`);
     console.log(`  GET  /api/autocomplete   - Get suggestions`);
+    console.log(`  GET  /health             - Server health check`);
     console.log(`\nFrontend: http://localhost:${PORT}`);
     console.log(`========================================\n`);
     
-    initializeStats();
+    // ✅ Initialize persistent C++ process
+    initializeCppProcess();
 });
